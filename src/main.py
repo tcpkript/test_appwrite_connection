@@ -1,82 +1,56 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from .appwrite_fastapi import AppwriteBridge
 import os
 import httpx
 from datetime import datetime
 
-# 1. Crear la aplicación FastAPI
-app = FastAPI(title="APPyWrite Telegram Bot")
+app = FastAPI(title="APPyWrite with Custom Cron Routing")
 
-# 2. Configuración de Telegram (Añadir a Appwrite Console)
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
-async def send_telegram_message(message: str):
-    """
-    Función de utilidad para enviar mensajes a Telegram.
-    """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Error: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados.")
-        return False
-        
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(url, json=payload)
-            return response.status_code == 200
-        except Exception as e:
-            print(f"Error enviando a Telegram: {e}")
-            return False
-
-# 3. Rutas de la API
+# --- RUTAS ---
 
 @app.get("/")
 async def root():
-    return {"status": "alive", "time": datetime.now().isoformat()}
+    return {"message": "APPyWrite is running!"}
 
 @app.get("/cron/telegram-alert")
-async def telegram_cron():
-    """
-    Este endpoint será llamado por el Scheduler de Appwrite.
-    Ej: cada 1 hora.
-    """
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    message = f"🚀 <b>APPyWrite Update</b>\n\nEl backend sigue vivo.\nFecha: <code>{now}</code>"
+async def telegram_alert():
+    """Esta es la ruta que queremos que el Cron ejecute"""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
-    success = await send_telegram_message(message)
+    if token and chat_id:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        async with httpx.AsyncClient() as client:
+            await client.post(url, json={
+                "chat_id": chat_id,
+                "text": f"⏰ <b>Cron Job Executed</b>\nTime: {datetime.now().isoformat()}",
+                "parse_mode": "HTML"
+            })
     
-    return {
-        "success": success,
-        "timestamp": now,
-        "message": "Cron alert executed"
-    }
+    return {"status": "success", "task": "telegram_alert"}
 
-@app.post("/telegram/notify")
-async def notify_custom(message: str):
-    """
-    Puedes llamar a este endpoint desde fuera (ej: Postman)
-    para mandar mensajes personalizados.
-    """
-    success = await send_telegram_message(message)
-    return {"status": "sent" if success else "failed"}
+@app.get("/cron/backup")
+async def backup_task():
+    """Otra ruta que podrías querer llamar con otro Cron"""
+    return {"status": "success", "task": "backup"}
 
-# 4. Configurar el Puente para Appwrite
+# --- EL PUENTE (CON ENRUTAMIENTO INTELIGENTE) ---
 bridge = AppwriteBridge(app)
 
-# 5. El punto de entrada (ASYNC)
 async def main(context):
-    # TIP: Appwrite Schedules envían la ruta '/' por defecto si no se especifica.
-    # Podemos forzar a que el Cron llame a la ruta del bot:
+    # 1. Detectamos si la llamada viene del Scheduler (Cron) de Appwrite
+    is_cron = context.req.headers.get("x-appwrite-trigger") == "schedule"
     
-    if context.req.headers.get("x-appwrite-trigger") == "schedule":
-        # Si el trigger es un Cron de Appwrite, podemos redirigirlo 
-        # internamente a nuestro endpoint del bot si queremos.
-        context.req.path = "/cron/telegram-alert"
+    if is_cron:
+        # 2. Leemos la variable de entorno que configuraste en la UI
+        # Si no existe, por defecto irá a '/'
+        target_path = os.environ.get("CRON_TARGET_PATH", "/")
         
+        # 3. 'ENGAÑAMOS' a FastAPI cambiando el path de la petición
+        # Ahora FastAPI pensará que la petición entró por esa ruta específica
+        context.req.path = target_path
+        
+        context.log(f"Cron detected! Routing internal request to: {target_path}")
+
+    # 4. El puente hace el resto
     return await bridge.handle(context)
