@@ -7,10 +7,9 @@ class AppwriteBridge:
     def __init__(self, app: Callable):
         self.app = app
 
-    def handle(self, context: Any) -> Any:
-        # Appwrite functions are synchronous, but FastAPI is asynchronous.
-        # We use asyncio.run to bridge the gap.
-        return asyncio.run(self._async_handle(context))
+    async def handle(self, context: Any) -> Any:
+        # Appwrite now runs an event loop, so we can await directly.
+        return await self._async_handle(context)
 
     async def _async_handle(self, context: Any) -> Any:
         # 1. Prepare the ASGI Scope

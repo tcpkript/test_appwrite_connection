@@ -23,10 +23,9 @@ async def get_user(user_id: str):
     return {"user_id": user_id, "status": "mocked", "message": "Ready to scale!"}
 
 # 3. Configurar el Puente para Appwrite
-# Instanciarlo fuera de main para mantener la app en memoria (Warm Start)
 bridge = AppwriteBridge(app)
 
-# 4. El punto de entrada que Appwrite espera
-def main(context):
+# 4. El punto de entrada que Appwrite espera (ahora ASYNC)
+async def main(context):
     # El bridge se encarga de traducir context -> FastAPI -> context
-    return bridge.handle(context)
+    return await bridge.handle(context)
