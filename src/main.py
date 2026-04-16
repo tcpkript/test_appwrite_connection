@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from appwrite_fastapi import AppwriteBridge
+from .appwrite_fastapi import AppwriteBridge
 import os
 
 # 1. Crear la aplicación FastAPI
