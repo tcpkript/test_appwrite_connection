@@ -1,0 +1,20 @@
+[project]
+name = "test-appwrite-connection"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "appwrite>=17.0.0",
+    "appwrite-fastapi",
+    "fastapi>=0.135.3",
+    "uvicorn>=0.44.0",
+]
+
+[tool.uv.sources]
+appwrite-fastapi = { workspace = true, editable = true }
+
+[tool.uv.workspace]
+members = [
+    "lib",
+]

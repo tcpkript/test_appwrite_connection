@@ -1,39 +1,32 @@
-from appwrite.client import Client
-from appwrite.services.users import Users
-from appwrite.exception import AppwriteException
+from fastapi import FastAPI
+from appwrite_fastapi import AppwriteBridge
 import os
 
-# This Appwrite function will be executed every time your function is triggered
+# 1. Crear la aplicación FastAPI
+app = FastAPI(title="Appwrite FastAPI Bridge")
+
+# 2. Definir tus rutas como lo harías normalmente
+@app.get("/")
+async def root():
+    return {
+        "motto": "Build like a team of hundreds_",
+        "learn": "https://appwrite.io/docs",
+        "bridge": "FastAPI is now running on Appwrite!"
+    }
+
+@app.get("/ping")
+async def ping():
+    return "Pong"
+
+@app.get("/users/{user_id}")
+async def get_user(user_id: str):
+    return {"user_id": user_id, "status": "mocked", "message": "Ready to scale!"}
+
+# 3. Configurar el Puente para Appwrite
+# Instanciarlo fuera de main para mantener la app en memoria (Warm Start)
+bridge = AppwriteBridge(app)
+
+# 4. El punto de entrada que Appwrite espera
 def main(context):
-    # You can use the Appwrite SDK to interact with other services
-    # For this example, we're using the Users service
-    client = (
-        Client()
-        .set_endpoint(os.environ["APPWRITE_FUNCTION_API_ENDPOINT"])
-        .set_project(os.environ["APPWRITE_FUNCTION_PROJECT_ID"])
-        .set_key(context.req.headers["x-appwrite-key"])
-    )
-    users = Users(client)
-
-    try:
-        response = users.list()
-        # Log messages and errors to the Appwrite Console
-        # These logs won't be seen by your end users
-        context.log("Total users: " + str(response["total"]))
-    except AppwriteException as err:
-        context.error("Could not list users: " + repr(err))
-
-    # The req object contains the request data
-    if context.req.path == "/ping":
-        # Use res object to respond with text(), json(), or binary()
-        # Don't forget to return a response!
-        return context.res.text("Pong")
-
-    return context.res.json(
-        {
-            "motto": "Build like a team of hundreds_",
-            "learn": "https://appwrite.io/docs",
-            "connect": "https://appwrite.io/discord",
-            "getInspired": "https://builtwith.appwrite.io",
-        }
-    )
+    # El bridge se encarga de traducir context -> FastAPI -> context
+    return bridge.handle(context)
